@@ -444,11 +444,25 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         (2..last_page).each do |page|
           parent.async do
+            check_limit_api()
             data = check_github_response { client.send(method, user_project, *arguments, page: page, **options) }
             yield data
           end
         end
       end
+    end
+
+    # This is function to check limit from api
+    #
+    def check_limit_api()
+      limit = client.rate_limit!
+      # puts "Getting data from Github API for #{v['github']}"
+      if limit.remaining.zero?
+        #  sleep 60 #Sleep between requests to prevent Github API - 403 response
+        sleep limit.resets_in
+        puts 'Waiting for rate limit reset in Github API'
+      end
+      sleep 2 # Keep Github API happy
     end
 
     # This is wrapper with rescue block
@@ -474,6 +488,9 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
       fail_with_message(e, "Exceeded retry limit")
     rescue Octokit::Unauthorized => e
       fail_with_message(e, "Error: wrong GitHub token")
+    rescue StandardError => e
+      Helper.log.error("#{e.class}: #{e.message}")
+      nil
     end
 
     # Presents the exception, and the aborts with the message.
