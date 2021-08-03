@@ -216,6 +216,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         issues.each do |issue|
           semaphore.async do
+            check_limit_api()
             issue["events"] = []
             iterate_pages(client, "issue_events", issue["number"], **preview) do |new_event|
               issue["events"].concat(new_event)
@@ -444,7 +445,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         (2..last_page).each do |page|
           parent.async do
-            check_limit_api()
+            #check_limit_api()
             data = check_github_response { client.send(method, user_project, *arguments, page: page, **options) }
             yield data
           end
