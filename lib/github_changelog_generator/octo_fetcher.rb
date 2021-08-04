@@ -6,7 +6,6 @@ require "async"
 require "async/barrier"
 require "async/semaphore"
 require "async/http/faraday"
-require "pry"
 
 module GitHubChangelogGenerator
   # A Fetcher responsible for all requests to GitHub and all basic manipulation with related data
