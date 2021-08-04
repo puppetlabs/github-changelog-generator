@@ -6,6 +6,7 @@ require "async"
 require "async/barrier"
 require "async/semaphore"
 require "async/http/faraday"
+require "pry"
 
 module GitHubChangelogGenerator
   # A Fetcher responsible for all requests to GitHub and all basic manipulation with related data
@@ -34,7 +35,7 @@ module GitHubChangelogGenerator
       @options      = options || {}
       @user         = @options[:user]
       @project      = @options[:project]
-      @since        = @options[:since]
+      @since        = @options[:since_commit]
       @http_cache   = @options[:http_cache]
       @commits      = []
       @branches     = nil
@@ -150,7 +151,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
     def closed_pr_options
       @closed_pr_options ||= {
         filter: "all", labels: nil, state: "closed"
-      }.tap { |options| options[:since] = @since if @since }
+      }.tap { |options| options[:since_commit] = @since if @since }
     end
 
     # This method fetch all closed issues and separate them to pull requests and pure issues
@@ -377,12 +378,14 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
       while queue.any?
         commit = queue.shift
         # If we've already processed this sha, just grab it's parents from the cache
-        if @commits_in_tag_cache.key?(commit[:sha])
-          shas.merge(@commits_in_tag_cache[commit[:sha]])
-        else
-          shas.add(commit[:sha])
-          commit[:parents].each do |p|
-            queue.push(@graph[p[:sha]]) unless shas.include?(p[:sha])
+        unless commit.nil?
+          if @commits_in_tag_cache.key?(commit[:sha])
+            shas.merge(@commits_in_tag_cache[commit[:sha]])
+          else
+            shas.add(commit[:sha])
+            commit[:parents].each do |p|
+              queue.push(@graph[p[:sha]]) unless shas.include?(p[:sha])
+            end
           end
         end
       end
@@ -445,7 +448,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         (2..last_page).each do |page|
           parent.async do
-            #check_limit_api()
+            check_limit_api()
             data = check_github_response { client.send(method, user_project, *arguments, page: page, **options) }
             yield data
           end
