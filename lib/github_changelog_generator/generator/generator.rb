@@ -42,6 +42,12 @@ module GitHubChangelogGenerator
       @tag_times_hash = {}
       @fetcher        = GitHubChangelogGenerator::OctoFetcher.new(options)
       @sections       = []
+      if @options[:since_commit].nil? && !@options[:since_tag].nil?
+        since_tag_time = get_time_of_specific_tags(@options[:since_tag])
+        @options[:since_commit] =  since_tag_time
+     else
+        @options[:since_commit]   = @options[:since_commit]
+     end
     end
 
     # Main function to start changelog generation

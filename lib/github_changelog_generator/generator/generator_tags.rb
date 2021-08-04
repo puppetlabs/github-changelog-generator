@@ -72,6 +72,16 @@ module GitHubChangelogGenerator
       end
     end
 
+    # @param [Hash]tag
+    # @return [Time] Get Time of specific Tag
+    def get_time_of_specific_tags(specific_tag)
+      all_tags = @fetcher.get_all_tags
+      all_sorted_tags = sort_tags_by_date(all_tags)
+      @sorted_tags   = filter_included_tags(all_sorted_tags)
+      tag_hash = sorted_tags.select { |tag| specific_tag == tag["name"] }
+      get_time_of_tag(tag_hash.first)
+    end
+
     # Detect link, name and time for specified tag.
     #
     # @param [Hash] newer_tag newer tag. Can be nil, if it's Unreleased section.

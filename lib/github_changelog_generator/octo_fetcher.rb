@@ -34,7 +34,7 @@ module GitHubChangelogGenerator
       @options      = options || {}
       @user         = @options[:user]
       @project      = @options[:project]
-      @since        = @options[:since]
+      @since        = @options[:since_commit]
       @http_cache   = @options[:http_cache]
       @commits      = []
       @branches     = nil
@@ -150,7 +150,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
     def closed_pr_options
       @closed_pr_options ||= {
         filter: "all", labels: nil, state: "closed"
-      }.tap { |options| options[:since] = @since if @since }
+      }.tap { |options| options[:since_commit] = @since if @since }
     end
 
     # This method fetch all closed issues and separate them to pull requests and pure issues
@@ -216,6 +216,7 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         issues.each do |issue|
           semaphore.async do
+            check_limit_api()
             issue["events"] = []
             iterate_pages(client, "issue_events", issue["number"], **preview) do |new_event|
               issue["events"].concat(new_event)
@@ -376,12 +377,14 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
       while queue.any?
         commit = queue.shift
         # If we've already processed this sha, just grab it's parents from the cache
-        if @commits_in_tag_cache.key?(commit[:sha])
-          shas.merge(@commits_in_tag_cache[commit[:sha]])
-        else
-          shas.add(commit[:sha])
-          commit[:parents].each do |p|
-            queue.push(@graph[p[:sha]]) unless shas.include?(p[:sha])
+        unless commit.nil?
+          if @commits_in_tag_cache.key?(commit[:sha])
+            shas.merge(@commits_in_tag_cache[commit[:sha]])
+          else
+            shas.add(commit[:sha])
+            commit[:parents].each do |p|
+              queue.push(@graph[p[:sha]]) unless shas.include?(p[:sha])
+            end
           end
         end
       end
@@ -444,11 +447,25 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
 
         (2..last_page).each do |page|
           parent.async do
+            check_limit_api()
             data = check_github_response { client.send(method, user_project, *arguments, page: page, **options) }
             yield data
           end
         end
       end
+    end
+
+    # This is function to check limit from api
+    #
+    def check_limit_api()
+      limit = client.rate_limit!
+      # puts "Getting data from Github API for #{v['github']}"
+      if limit.remaining.zero?
+        #  sleep 60 #Sleep between requests to prevent Github API - 403 response
+        sleep limit.resets_in
+        puts 'Waiting for rate limit reset in Github API'
+      end
+      sleep 2 # Keep Github API happy
     end
 
     # This is wrapper with rescue block
@@ -474,6 +491,9 @@ Make sure, that you push tags to remote repo via 'git push --tags'"
       fail_with_message(e, "Exceeded retry limit")
     rescue Octokit::Unauthorized => e
       fail_with_message(e, "Error: wrong GitHub token")
+    rescue StandardError => e
+      Helper.log.error("#{e.class}: #{e.message}")
+      nil
     end
 
     # Presents the exception, and the aborts with the message.
